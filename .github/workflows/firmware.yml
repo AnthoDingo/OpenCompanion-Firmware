@@ -1,0 +1,30 @@
+name: firmware
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install platformio
+      - run: pio run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: .pio/build/*/firmware.bin
+      # tag vX.Y (= FW_VERSION 0xXY0 de src/main.cpp) : publie firmware.bin, installé par l'appli TeamsCompanion.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp .pio/build/*/firmware.bin firmware.bin
+          gh release create "$GITHUB_REF_NAME" firmware.bin --generate-notes
