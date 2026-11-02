@@ -21,10 +21,16 @@ jobs:
         with:
           name: firmware
           path: .pio/build/*/firmware.bin
-      # tag vX.Y (= FW_VERSION 0xXY0 de src/main.cpp) : publie firmware.bin, installé par l'appli TeamsCompanion.
+      # tag vX.Y (= FW_VERSION 0xXY0 de src/main.cpp) : signe et publie firmware.bin, installé par l'appli TeamsCompanion.
       - if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
         run: |
+          test -n "$SIGNING_KEY" || { echo "secret FIRMWARE_SIGNING_KEY manquant"; exit 1; }
           cp .pio/build/*/firmware.bin firmware.bin
-          gh release create "$GITHUB_REF_NAME" firmware.bin --generate-notes
+          # Signature détachée ECDSA P-256 / SHA-256 (DER), vérifiée dans l'appli avec la clé publique embarquée.
+          printf '%s' "$SIGNING_KEY" > signing.pem
+          openssl dgst -sha256 -sign signing.pem -out firmware.bin.sig firmware.bin
+          rm -f signing.pem
+          gh release create "$GITHUB_REF_NAME" firmware.bin firmware.bin.sig --generate-notes
