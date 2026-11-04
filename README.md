@@ -3,9 +3,9 @@
 Firmware ESP32-S3 du compagnon [OpenCompanion](https://github.com/AnthoDingo/OpenCompanion).
 
 La carte se présente en USB comme un périphérique HID nommé « OpenCompanion ». Elle reçoit une
-ligne de texte par statut (`OFFLINE`, `AVAILABLE`, `AWAY`, `BRB`, `CALL`, `VIDEO`, `BUSY`, `DND`, `UPDATE` pendant une mise à jour du firmware),
+ligne de texte par statut (`OFFLINE`, `NOTEAMS` quand Teams est fermé, `AVAILABLE`, `AWAY`, `BRB`, `CALL`, `VIDEO`, `BUSY`, `DND`, `UPDATE` pendant une mise à jour du firmware),
 éventuellement suivie du libellé localisé à afficher (`STATUT|Libellé`) et du numéro du compagnon
-(`STATUT|Libellé|N` : 0 Pousse, 1 chouette, 2 magicien, 3 Trombone, 4 calculatrice), et anime le compagnon.
+(`STATUT|Libellé|N` : 0 Pousse, 1 chouette, 2 magicien, 3 Trombone, 4 calculatrice, 5 panda), et anime le compagnon.
 Le dernier compagnon reçu est mémorisé en flash et réaffiché au redémarrage.
 
 Carte : **Waveshare ESP32-S3-LCD-1.69** (écran ST7789V2 240×280 intégré). Réglages carte/écran dans `platformio.ini`.
@@ -52,6 +52,6 @@ Avec Git Bash (fourni par Git pour Windows), les commandes openssl marchent auss
 
 ## Sprites
 
-`src/sprites.h` est **généré** depuis les PNG du dépôt principal
-([OpenCompanion](https://github.com/AnthoDingo/OpenCompanion), `sprites/png2h.py`). Pour modifier un
-sprite, régénérez-le là-bas et recopiez `sprites.h` ici.
+`src/sprites.h` et `src/companions/<compagnon>.h` (un fichier par compagnon) sont **générés** depuis les PNG
+du dépôt principal ([OpenCompanion](https://github.com/AnthoDingo/OpenCompanion), `sprites/png2h.py`). Pour modifier
+un sprite, régénérez-les là-bas : le script écrit directement dans ce dépôt s'il est cloné à côté.

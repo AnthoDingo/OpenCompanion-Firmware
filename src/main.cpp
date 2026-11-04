@@ -14,14 +14,15 @@
 #define TXT_DND "Ne pas deranger"
 #define TXT_UPDATE "Mise a jour"
 #define TXT_BRB "Je reviens vite"
+#define TXT_NOTEAMS "Teams ferme"
 
-// Reçoit une ligne par statut (OFFLINE, AVAILABLE, AWAY, BRB, CALL, VIDEO, BUSY, DND, UPDATE) en HID USB,
+// Reçoit une ligne par statut (OFFLINE, NOTEAMS, AVAILABLE, AWAY, BRB, CALL, VIDEO, BUSY, DND, UPDATE) en HID USB,
 // ou sur le port série USB pour tester à la main depuis un moniteur série, et anime le compagnon (sprites 32x32 de sprites/<compagnon>/*.png, agrandis x SCALE).
 
-// Version en BCD (0x0100 = 1.0), à garder égale à CompanionLink.ExpectedFirmware de l'appli PC.
-#define FW_VERSION 0x0100
+// Version en BCD (0x0110 = 1.1), à garder égale à CompanionLink.ExpectedFirmware de l'appli PC.
+#define FW_VERSION 0x0110
 
-enum State { OFFLINE, AVAILABLE, AWAY, BRB, CALL, VIDEO, OCCUPIED, DND, UPDATING };
+enum State { OFFLINE, NOTEAMS, AVAILABLE, AWAY, BRB, CALL, VIDEO, OCCUPIED, DND, UPDATING };
 
 struct Anim { const uint8_t* frames; uint8_t count; uint16_t ms; };
 const uint8_t A_AVAILABLE[] = {F_IDLE, F_IDLE, F_IDLE, F_LOOK, F_LOOK, F_IDLE, F_BLINK, F_IDLE,
@@ -32,6 +33,8 @@ const uint8_t A_BUSY[] = {F_IDLE, F_IDLE, F_IDLE, F_IDLE, F_BLINK, F_IDLE};  // 
 const uint8_t A_DND[] = {F_BACK};
 const uint8_t A_UPDATE[] = {F_IDLE, F_IDLE, F_LOOK, F_IDLE, F_BLINK, F_IDLE, F_SQUASH, F_IDLE};
 const uint8_t A_BRB[] = {F_LOOK};  // le compagnon passe juste une tête par le bord (drawPeek)
+// Teams fermé : il attend, regarde de côté et cligne des yeux ; la bulle « … » fait le reste (drawWaiting).
+const uint8_t A_NOTEAMS[] = {F_IDLE, F_IDLE, F_IDLE, F_LOOK, F_LOOK, F_LOOK, F_IDLE, F_BLINK, F_IDLE, F_IDLE};
 const uint8_t A_OFFLINE[] = {F_OFFLINE};
 
 const int SCALE = 6;  // 32 x 6 = 192 px
@@ -48,10 +51,11 @@ State recvLabelState = OFFLINE;  // statut auquel recvLabel se rapporte
 Companion companion = C_POUSSE;  // choisi dans l'appli (3e champ), mémorisé en flash (NVS) pour le prochain démarrage
 Preferences prefs;
 // Mains qui tapent en DND : index de palette contour, base, reflet de chaque compagnon.
-const uint8_t HAND[C_COUNT][3] = {{1, 2, 4}, {1, 10, 12}, {1, 16, 5}, {1, 9, 5}, {1, 14, 9}};
+const uint8_t HAND[C_COUNT][3] = {{1, 2, 4}, {1, 10, 12}, {1, 16, 5}, {1, 9, 5}, {1, 14, 9}, {1, 6, 9}};
 
 State parse(const String& s) {
   if (s == "AVAILABLE") return AVAILABLE;
+  if (s == "NOTEAMS") return NOTEAMS;
   if (s == "AWAY") return AWAY;
   if (s == "BRB") return BRB;
   if (s == "CALL") return CALL;
@@ -233,6 +237,20 @@ int peekX(uint32_t dt, int center) {
   return out + (in - out) * e;
 }
 
+// NOTEAMS : bulle de discussion en haut à droite (en retrait du coin arrondi de l'écran), queue vers la tête du
+// compagnon, et trois points qui se soulèvent à tour de rôle comme « en train d'écrire » : il attend que Teams s'ouvre.
+void drawWaiting(uint32_t t, int w) {
+  const int bx = w - 92, by = 16, bw = 70, bh = 32;
+  const uint16_t ink = tft.color24to16(0x1A1C2C);
+  spr.fillTriangle(bx + 14, by + bh - 2, bx + 30, by + bh - 2, bx + 8, by + bh + 14, ink);  // queue, contour
+  spr.fillRoundRect(bx - 2, by - 2, bw + 4, bh + 4, 12, ink);
+  spr.fillRoundRect(bx, by, bw, bh, 10, TFT_WHITE);
+  spr.fillTriangle(bx + 16, by + bh - 2, bx + 27, by + bh - 2, bx + 11, by + bh + 10, TFT_WHITE);
+  int up = t / 220 % 5;  // 3 points levés tour à tour, puis 2 temps de pause
+  for (int i = 0; i < 3; i++)
+    spr.fillCircle(bx + 17 + i * 18, by + bh / 2 - (i == up ? 4 : 0), 5, tft.color24to16(i == up ? 0x464775 : 0x8A8886));
+}
+
 // Rend true quand l'animation doit rester fluide, pour que loop() redessine sans attendre.
 bool draw(uint32_t t) {
   static State shown = OFFLINE;
@@ -260,6 +278,7 @@ bool draw(uint32_t t) {
     case OCCUPIED: anim = {A_BUSY, sizeof A_BUSY, 300}; label = TXT_BUSY; bg = 0xC4314B; break;
     case DND: anim = {A_DND, sizeof A_DND, 1000}; label = TXT_DND; bg = 0xC4314B; break;
     case BRB: anim = {A_BRB, sizeof A_BRB, 1000}; label = TXT_BRB; bg = 0xFCD116; break;
+    case NOTEAMS: anim = {A_NOTEAMS, sizeof A_NOTEAMS, 400}; label = TXT_NOTEAMS; bg = 0xD0D2EC; break;
     case UPDATING: anim = {A_UPDATE, sizeof A_UPDATE, 250}; label = TXT_UPDATE; bg = 0x3A5078; break;
     default: break;
   }
@@ -295,6 +314,7 @@ bool draw(uint32_t t) {
   }
 
   if (state == UPDATING) drawProgress(t, w, oy + 32 * SCALE + 4);
+  if (state == NOTEAMS) drawWaiting(t, w);
 
   spr.setTextColor(state == UPDATING ? TFT_WHITE : TFT_BLACK);  // fond sombre
   spr.setTextDatum(BC_DATUM);
